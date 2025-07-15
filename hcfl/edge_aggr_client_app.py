@@ -1,18 +1,18 @@
 import os
-import numpy as np
+import pickle
 
 from flwr.client import NumPyClient, ClientApp
-from flwr.common import Context, ndarrays_to_parameters, parameters_to_ndarrays
+from flwr.common import Context
 
 
 class EdgeAggrClient(NumPyClient):
 
     def fit(self, parameters, config):
-        filepath = "weights.npz"
-        print(f"saving global model weights to file: {filepath}")
-        np.savez(filepath, *parameters)
-
-        print(f"global model weights saved to {filepath}")
+        global_weights_filepath = "weights.pkl"
+        print(f"saving global model weights to file: {global_weights_filepath}")
+        with open(global_weights_filepath, "wb") as file:
+            pickle.dump(parameters, file)
+        print("done")
 
         print("sending signal")
         glb_aggr_pipe = "glb_aggr_sig"
@@ -31,18 +31,20 @@ class EdgeAggrClient(NumPyClient):
         print(f"signal received: {signal}\n")
         os.remove(loc_aggr_pipe)
 
-        print("loading aggregated weights from file")
-        aggr_weights_ndarrays = np.load("weights.npz")
+        updated_weights_filepath = "weights.pkl"
+        print(f"loading weights from file: {updated_weights_filepath}")
+        with open(updated_weights_filepath, "rb") as file:
+            updated_parameters_ndarrays = pickle.load(file)
         print("done")
 
         print("removing weights file")
-        os.remove("weights.npz")
+        os.remove(updated_weights_filepath)
         print("done")
 
-        return aggr_weights_ndarrays, 1, {}
+        return updated_parameters_ndarrays, 1, {}
 
     def evaluate(self, parameters, config):
-        return 1.0, 1, {"accuracy": 0.0}
+        return 1.0, 1, {"accuracy": 0.0}  # TODO: replace placeholder return data with actual evaulation logic
 
 
 def client_fn(context: Context):
