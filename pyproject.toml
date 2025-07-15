@@ -1,0 +1,40 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "hcfl"
+version = "1.0.0"
+description = ""
+license = "Apache-2.0"
+dependencies = [
+    "flwr[simulation]>=1.19.0",
+    "flwr-datasets[vision]>=0.5.0",
+    "tensorflow>=2.11.1,<2.18.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["."]
+
+[tool.flwr.app]
+publisher = "dfl0"
+
+[tool.flwr.app.components]
+# serverapp = "hcfl.central_aggr_server_app:app"
+# clientapp = "hcfl.edge_aggr_client_app:app"
+serverapp = "hcfl.edge_aggr_server_app:app"
+clientapp = "hcfl.edge_worker_client_app:app"
+
+[tool.flwr.app.config]
+num-server-rounds = 1
+local-epochs = 1
+batch-size = 32
+verbose = true
+
+[tool.flwr.federations]
+default = "test"
+
+[tool.flwr.federations.test]
+# address = "127.0.0.1:9093"
+address = "127.0.0.1:8083"
+insecure = true
