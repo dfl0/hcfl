@@ -20,21 +20,27 @@ packages = ["."]
 publisher = "dfl0"
 
 [tool.flwr.app.components]
-# serverapp = "hcfl.central_aggr_server_app:app"
-# clientapp = "hcfl.edge_aggr_client_app:app"
-serverapp = "hcfl.edge_aggr_server_app:app"
-clientapp = "hcfl.edge_worker_client_app:app"
+serverapp = "hcfl.server_app:app"
+clientapp = "hcfl.client_app:app"
 
 [tool.flwr.app.config]
+central-server = true
 num-server-rounds = 1
 local-epochs = 1
 batch-size = 32
 verbose = true
 
 [tool.flwr.federations]
-default = "test"
+default = "central-aggr"
 
-[tool.flwr.federations.test]
-# address = "127.0.0.1:9093"
-address = "127.0.0.1:8083"
+[tool.flwr.federations.central-aggr]
 insecure = true
+address = "127.0.0.1:9093"
+
+[tool.flwr.federations.edge-aggr1]
+insecure = true
+address = "127.0.0.1:8083"
+
+[tool.flwr.federations.edge-aggr2]
+insecure = true
+address = "127.0.0.1:8183"
