@@ -12,7 +12,8 @@ from flwr.common import (
     ndarrays_to_parameters,
     parameters_to_ndarrays,
 )
-from flwr.server import ServerApp, ServerAppComponents, ServerConfig
+from flwr.server import ServerApp, ServerAppComponents, ServerConfig, Server
+from flwr.server.client_manager import SimpleClientManager
 from flwr.server.strategy import FedAvg
 from flwr.server.client_proxy import ClientProxy
 
@@ -43,6 +44,21 @@ class CentralFedAvg(FedAvg):
         return parameters_aggregated, metrics_aggregated
 
 
+class EdgeAggrServer(Server):
+    def fit(self, num_rounds: int, timeout: Optional[float]):
+        history, elapsed = super().fit(num_rounds, timeout)
+
+        print("\n*** All rounds of training and aggregation complete ***\n")
+
+        print("Sending signal...", end='')
+        loc_aggr_pipe = "loc_aggr_sig"
+        with open(loc_aggr_pipe, "w") as pipe:
+            pipe.write("LOC_AGGR_W")  # -> Edge Aggregator client
+        print("Done")
+
+        return history, elapsed
+
+
 class EdgeFedAvg(FedAvg):
     def __repr__(self) -> str:
         """Compute a string representation of the strategy."""
@@ -65,15 +81,7 @@ class EdgeFedAvg(FedAvg):
         with open(aggr_weights_filepath, "wb") as file:
             updated_parameters_ndarrays = parameters_to_ndarrays(parameters_aggregated)
             pickle.dump(updated_parameters_ndarrays, file)
-        print(f"[Round {server_round}] Aggregated weights saved: {aggr_weights_filepath}")
-
-        print("Sending signal...", end='')
-        loc_aggr_pipe = "loc_aggr_sig"
-        with open(loc_aggr_pipe, "w") as pipe:
-            pipe.write("LOC_AGGR_W")  # -> Edge Aggregator client
-        print("Done")
-
-        print(f"[Round {server_round}] Aggregation complete.")
+        print(f"[Round {server_round}] Aggregated compllete,  weights saved: {aggr_weights_filepath}")
         print(f"\n{'-' * 80}\n")
 
         return parameters_aggregated, metrics_aggregated
@@ -113,10 +121,9 @@ def evaluate_metrics_aggregation_fn(eval_metrics: List[Tuple[int, Metrics]]) -> 
 
 def server_fn(context: Context) -> ServerAppComponents:
     is_central = context.run_config["central-server"]
-    # num_rounds = context.run_config["num-server-rounds"]
-    num_rounds = 1
 
     if is_central:
+        num_rounds = context.run_config["num-global-rounds"]
         parameters = ndarrays_to_parameters(load_model().get_weights())
         strategy = CentralFedAvg(
             fraction_fit=1.0,
@@ -133,7 +140,9 @@ def server_fn(context: Context) -> ServerAppComponents:
         return ServerAppComponents(strategy=strategy, config=config)
 
     else:
-        print("Waiting for global aggregation to finish...")
+        num_rounds = 1
+
+        print("Waiting for global parameters to finish...")
 
         glb_aggr_pipe = "glb_aggr_sig"
         if not os.path.exists(glb_aggr_pipe):
@@ -156,6 +165,9 @@ def server_fn(context: Context) -> ServerAppComponents:
         print("Removing weights file... ", end='')
         os.remove(gbl_weights_filepath)
         print("Done")
+
+        client_manager = SimpleClientManager()
+        server = EdgeAggrServer(client_manager=client_manager)
         strategy = EdgeFedAvg(
             fraction_fit=1.0,
             fraction_evaluate=1.0,
@@ -166,7 +178,7 @@ def server_fn(context: Context) -> ServerAppComponents:
         )
         config = ServerConfig(num_rounds=num_rounds)
 
-        return ServerAppComponents(strategy=strategy, config=config)
+        return ServerAppComponents(server=server, strategy=strategy, config=config)
 
 
 app = ServerApp(server_fn=server_fn)
