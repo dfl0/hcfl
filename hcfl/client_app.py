@@ -68,6 +68,12 @@ class EdgeClient(NumPyClient):
         )
         return self.model.get_weights(), len(self.x_train), {}
 
+    def get_parameters(self, config):
+        return self.model.get_weights()
+
+    def set_parameters(self, parameters):
+        return self.model.set_weights(parameters)
+
     def evaluate(self, parameters, config):
         self.model.set_weights(parameters)
         loss, accuracy = self.model.evaluate(self.x_test, self.y_test, verbose=0)
